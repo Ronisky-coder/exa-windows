@@ -8,9 +8,9 @@ const tmp2 = require('fs').mkdtempSync(require('path').join(require('os').tmpdir
 const log = { wins: [], handlers: {}, shortcuts: {}, openExternal: [], boxes: [], lock: true, login: null, quit: false, once: {}, appOn: {} };
 class Win {
   constructor(o) { this.o = o; this.loaded = []; this.ev = {}; this.shown = false; this.destroyed = false; this.focused = false;
-    this.webContents = { setWindowOpenHandler: (f) => { this.openHandler = f; }, on: (n, f) => { this.nav = f; } }; log.wins.push(this); }
+    this.wc = {}; this.webContents = { setWindowOpenHandler: (f) => { this.openHandler = f; }, on: (n, f) => { if (n === 'will-navigate') this.nav = f; this.wc[n] = f; }, getURL: () => 'https://site.test/new?handoff=' + 'c'.repeat(32), reloadIgnoringCache: () => { this.reloaded = true; }, toggleDevTools: () => { this.dev = true; } }; log.wins.push(this); }
   setMenuBarVisibility() {} once(n, f) { this.once_ = f; } on(n, f) { this.ev[n] = f; }
-  loadURL(u) { this.loaded.push(u); } loadFile(f) { this.file = f; }
+  loadURL(u) { this.loaded.push(u); return Promise.resolve(); } loadFile(f) { this.file = f; }
   show() { this.shown = true; } hide() { this.shown = false; } focus() { this.focused = true; } isMinimized() { return false; } restore() {}
   isVisible() { return this.shown; } isFocused() { return this.focused; } isDestroyed() { return this.destroyed; }
   close() { this.destroyed = true; this.ev.closed && this.ev.closed(); } destroy() { this.close(); }
@@ -54,6 +54,18 @@ test('window rules: the Exa window has no Node, closing hides it, links open out
   w.openHandler({ url: 'file:///C:/Windows/system32/calc.exe' }); assert.strictEqual(log.openExternal.length, 1);   // never opens a file: link
   let p = false; w.nav({ preventDefault: () => { p = true; } }, 'file:///etc/passwd'); assert.ok(p);
   p = false; w.nav({ preventDefault: () => { p = true; } }, 'https://accounts.google.com/o/oauth2'); assert.ok(!p);
+});
+
+test('the Exa window keeps a note, shows a plain page when Exa cannot load, and has reload and developer tools keys', () => {
+  const w = exa(), logf = path.join(tmp2, 'last-run.log'), keep = () => fs.readFileSync(logf, 'utf8');
+  w.wc['did-finish-load'](); assert.match(keep(), /page loaded https:\/\/site\.test\/new\n/); assert.ok(!keep().includes('handoff='), 'the one-time id is never written down');
+  w.wc['did-fail-load']({}, -3, 'ERR_ABORTED', 'https://site.test/new', true); assert.ok(!w.file, 'a replaced load is not a failure');
+  w.wc['did-fail-load']({}, -105, 'ERR_NAME_NOT_RESOLVED', 'https://site.test/new', true);
+  assert.ok(w.file.endsWith('offline.html')); assert.match(keep(), /page failed -105 ERR_NAME_NOT_RESOLVED/);
+  w.wc['console-message']({}, 3, 'Uncaught TypeError: x is not a function', 7, 'https://site.test/app.js?v=1'); assert.match(keep(), /page error: Uncaught TypeError.*app\.js:7/);
+  w.wc['render-process-gone']({}, { reason: 'crashed' }); assert.match(keep(), /process gone: crashed/);
+  let pd = false; w.wc['before-input-event']({ preventDefault: () => { pd = true; } }, { type: 'keyDown', key: 'r', control: true }); assert.ok(w.reloaded && pd);
+  w.wc['before-input-event']({ preventDefault() {} }, { type: 'keyDown', key: 'I', control: true, shift: true }); assert.ok(w.dev);
 });
 
 test('the Alt+Space shortcut shows Exa, then hides it when focused', () => {

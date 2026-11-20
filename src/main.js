@@ -14,6 +14,26 @@ const state = { exa: null, picker: null, root: null, tray: null, quitting: false
 
 function icon() { return nativeImage.createFromPath(path.join(__dirname, '..', 'build', 'icon.png')); }
 
+// Keeps a note of what the Exa window does (page address without the query, errors) and shows a plain page if Exa cannot load.
+function where(u) { try { const x = new URL(u); return x.origin + x.pathname; } catch (_) { return '?'; } }
+function watch(w) {
+  const c = w.webContents; let errs = 0;
+  c.on('did-finish-load', () => note('page loaded ' + where(c.getURL())));
+  c.on('did-fail-load', (_e, code, desc, url, isMain) => {
+    if (!isMain || code === -3) return;                                  // -3 = replaced by a newer load, not a failure
+    note('page failed ' + code + ' ' + desc + ' ' + where(url));
+    w.loadFile(path.join(__dirname, '..', 'picker', 'offline.html'));
+  });
+  c.on('render-process-gone', (_e, d) => note('page process gone: ' + (d && d.reason)));
+  c.on('unresponsive', () => note('page not responding'));
+  c.on('console-message', (_e, level, msg, line, src) => { if (level >= 3 && errs++ < 20) note('page error: ' + String(msg).slice(0, 300) + ' (' + where(src) + ':' + line + ')'); });
+  c.on('before-input-event', (e, i) => {                                 // Ctrl+R / F5 reload, Ctrl+Shift+I opens the developer tools
+    if (i.type !== 'keyDown') return;
+    if (i.key === 'F5' || (i.control && i.key.toLowerCase() === 'r')) { e.preventDefault(); c.reloadIgnoringCache(); }
+    else if (i.control && i.shift && i.key.toLowerCase() === 'i') { e.preventDefault(); c.toggleDevTools(); }
+  });
+}
+
 function exaWindow() {
   if (state.exa && !state.exa.isDestroyed()) return state.exa;
   const w = new BrowserWindow({
@@ -25,14 +45,15 @@ function exaWindow() {
   w.on('close', (e) => { if (!state.quitting) { e.preventDefault(); w.hide(); } });       // closing hides it; Quit is in the tray
   w.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:/i.test(url)) shell.openExternal(url); return { action: 'deny' }; });
   w.webContents.on('will-navigate', (e, url) => { if (!/^https:/i.test(url) && !url.startsWith(SITE_ORIGIN)) e.preventDefault(); });
-  w.loadURL(SITE + '/new');
+  watch(w);
+  w.loadURL(SITE + '/new').catch(() => {});       // a load that is replaced by a newer one (or fails) is reported by watch()
   state.exa = w;
   return w;
 }
 
 function showExa(url) {
   const w = exaWindow();
-  if (url) w.loadURL(url);
+  if (url) w.loadURL(url).catch(() => {});
   if (w.isMinimized()) w.restore();
   w.show(); w.focus();
   return w;
