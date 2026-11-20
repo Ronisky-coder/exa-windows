@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data:">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ask Exa</title>
+<link rel="stylesheet" href="picker.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M7 3h7l5 5v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M14 3v5h5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-tick" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+</svg>
+<main class="wrap">
+  <header class="top">
+    <button id="back" class="icon" aria-label="Back to the folder above" hidden><svg width="18" height="18"><use href="#i-back"/></svg></button>
+    <div class="ttl">
+      <h1>Choose what Exa should look at</h1>
+      <p id="where" class="sub"></p>
+    </div>
+  </header>
+  <div class="bar">
+    <button id="all" class="link" type="button">Select all</button>
+    <span id="hint" class="hint"></span>
+  </div>
+  <ul id="list" class="list" role="list" aria-label="Files and folders"></ul>
+  <p id="empty" class="empty" hidden>Nothing here to choose.</p>
+  <p id="more" class="empty" hidden>Only the first 1,000 items are shown.</p>
+  <footer class="foot">
+    <p id="err" class="err" role="alert" hidden></p>
+    <p class="priv">Exa only receives the files you tick. Nothing else leaves your computer.</p>
+    <div class="row">
+      <span id="count" class="count"></span>
+      <button id="cancel" class="btn" type="button">Cancel</button>
+      <button id="go" class="btn pri" type="button" disabled>Ask Exa</button>
+    </div>
+  </footer>
+</main>
+<script src="picker.js"></script>
+</body>
+</html>
