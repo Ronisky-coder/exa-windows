@@ -4,6 +4,7 @@
 const test = require('node:test'); const assert = require('node:assert');
 const fs = require('fs'), os = require('os'), path = require('path'), Module = require('module');
 
+const tmp2 = require('fs').mkdtempSync(require('path').join(require('os').tmpdir(), 'exa-ud-'));
 const log = { wins: [], handlers: {}, shortcuts: {}, openExternal: [], boxes: [], lock: true, login: null, quit: false, once: {}, appOn: {} };
 class Win {
   constructor(o) { this.o = o; this.loaded = []; this.ev = {}; this.shown = false; this.destroyed = false; this.focused = false;
@@ -16,7 +17,7 @@ class Win {
 }
 const electron = {
   app: { requestSingleInstanceLock: () => log.lock, quit: () => { log.quit = true; }, setAppUserModelId() {}, on: (n, f) => { log.appOn[n] = f; },
-         whenReady: () => Promise.resolve(), getLoginItemSettings: () => ({ openAtLogin: false }), setLoginItemSettings: (o) => { log.login = o; } },
+         whenReady: () => Promise.resolve(), getPath: () => tmp2, getLoginItemSettings: () => ({ openAtLogin: false }), setLoginItemSettings: (o) => { log.login = o; } },
   BrowserWindow: Win, Tray: class { constructor() { this.m = null; } setToolTip() {} setContextMenu(m) { this.m = m; } on() {} },
   Menu: { buildFromTemplate: (t) => t }, nativeImage: { createFromPath: () => ({ resize: () => ({}) }) },
   globalShortcut: { register: (k, f) => { log.shortcuts[k] = f; }, unregisterAll() {} },
@@ -94,7 +95,7 @@ test('a failed upload comes back to the picker as a message and the picker stays
 });
 
 test('missing item and a file failure show a message box', async () => {
-  log.appOn['second-instance']({}, ['Exa.exe', '--ask', path.join(tmp, 'gone')]); await settle(); assert.match(log.boxes.pop(), /could not find/);
+  log.appOn['second-instance']({}, ['Exa.exe', '--ask', path.join(tmp, 'gone')]); await settle(); assert.match(log.boxes.pop(), /could not find that item:\n.*gone/); assert.match(fs.readFileSync(path.join(tmp2, 'last-run.log'), 'utf8'), /could not open .*gone.*ENOENT/);
   log.appOn['second-instance']({}, ['Exa.exe', '--ask', path.join(dir, 'a.txt')]); await settle(); assert.match(log.boxes.pop(), /could not reach Exa/);
 });
 

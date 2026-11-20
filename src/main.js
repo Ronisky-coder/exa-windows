@@ -67,9 +67,18 @@ function openPicker(folder) {
   state.picker = w;
 }
 
+// A short note kept on this computer only (what Windows handed to the app), so a failure can be diagnosed: %APPDATA%\Exa\last-run.log
+function note(text) {
+  try { const fs = require('fs'); const f = path.join(app.getPath('userData'), 'last-run.log'); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.appendFileSync(f, new Date().toISOString() + '  ' + text + '\n'); } catch (_) {}
+}
+
 function ask(target) {
   const fs = require('fs');
-  let st; try { st = fs.statSync(target); } catch (_) { return problem('Ask Exa could not find that item.'); }
+  if (/^[A-Za-z]:$/.test(target)) target += '\\';                      // "D:" means the current folder of D; "D:\\" is the drive
+  let st; try { st = fs.statSync(target); } catch (err) {
+    note('could not open ' + JSON.stringify(target) + ' (' + (err && err.code) + '); app arguments: ' + JSON.stringify(process.argv.slice(1)));
+    return problem('Ask Exa could not find that item:\n' + target);
+  }
   if (st.isDirectory()) return openPicker(target);
   if (!st.isFile()) return problem('Ask Exa can only take files and folders.');
   const dir = path.dirname(target);
@@ -77,6 +86,7 @@ function ask(target) {
 }
 
 function handle(argv) {
+  note('started with ' + JSON.stringify(argv.slice(1)));
   const a = core.parseArgs(argv);
   if (a.ask) ask(a.ask); else if (!a.hidden) showExa();
 }

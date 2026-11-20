@@ -7,13 +7,15 @@ A small Windows app that lives in the tray and adds **Ask Exa** to the right-cli
 - Exa opens in the app's own window, so you sign in once and stay signed in. **Alt+Space** shows or hides Exa. The tray icon has Open Exa, Start with Windows (off by default) and Quit. Closing the window hides it; Quit is in the tray.
 - Exa then says what it sees and asks what you want to do. It cannot change files on your computer.
 
+If something fails, the app keeps a short note of what Windows gave it (paths and error codes, on this computer only) in `%APPDATA%\Exa\last-run.log`.
+
 ## How it sends things
 The app posts the ticked files to `POST /api/handoff` on the Exa backend (5.6.13+), gets back a one-time id, and opens `https://exa.openwist.com/new?handoff=<id>` in its own window. The website claims the id once, attaches the files and writes a first message. The drop lives 15 minutes and is deleted when read. See `DEPLOY.md` in the website package.
 
 ## Build the installer (no Windows PC needed)
 1. Put this folder in a GitHub repository (for example `openwist/exa-desktop`).
 2. Open the repository's **Actions** tab, choose **Build Exa for Windows**, press **Run workflow**.
-3. When it finishes, download the artifact **Exa-Setup**. Inside is `Exa-Setup-0.1.0.exe`.
+3. When it finishes, download the artifact **Exa-Setup**. Inside is `Exa-Setup-0.1.1.exe`.
 The workflow runs the tests first (`npm test`), then builds a per-user installer (no administrator rights). Installing adds the right-click entries to `HKCU\Software\Classes\Directory\shell\AskExa` and `...\*\shell\AskExa`; uninstalling removes them.
 
 To run it from source on a computer with Node 20: `npm install`, then `npm start` (a folder to test with: `npx electron . --ask "C:\some\folder"`).
