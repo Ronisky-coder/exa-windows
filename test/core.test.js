@@ -8,6 +8,16 @@ w('Docs/a b.pdf', 'pdf'); w('Docs/é ü.csv', 'x,y'); w('Docs/Old/1.txt', 'one')
 w('Docs/big.bin', Buffer.alloc(core.LIMITS.maxFile + 1)); w('outside/x.txt', 'no');
 const root = path.join(tmp, 'Docs');
 
+test('parseArgs: the form the right-click menu uses, and the order Chromium rewrites it into', () => {
+  const P = 'C:\\Users\\x\\My Docs';
+  assert.strictEqual(core.parseArgs(['Exa.exe', '--ask=' + P]).ask, P);
+  assert.strictEqual(core.parseArgs(['Exa.exe', '--allow-file-access-from-files', '--ask=' + P]).ask, P);
+  assert.strictEqual(core.parseArgs(['Exa.exe', '--ask', '--allow-file-access-from-files', P]).ask, P);      // the failure seen on Windows
+  assert.strictEqual(core.parseArgs(['Exa.exe', '--ask', '--allow-file-access-from-files']).ask, null);       // never mistakes a switch for a path
+  assert.strictEqual(core.parseArgs(['Exa.exe', '--ask=']).ask, null);
+  assert.strictEqual(core.parseArgs(['Exa.exe', '--ask="' + P + '"']).ask, P);
+});
+
 test('parseArgs', () => {
   assert.deepStrictEqual(core.parseArgs(['Exa.exe', '--ask', 'C:\\Users\\x\\My Docs']), { ask: 'C:\\Users\\x\\My Docs', hidden: false });
   assert.deepStrictEqual(core.parseArgs(['Exa.exe', '--ask', '"C:\\a b"']).ask, 'C:\\a b');

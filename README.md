@@ -15,7 +15,7 @@ The app posts the ticked files to `POST /api/handoff` on the Exa backend (5.6.13
 ## Build the installer (no Windows PC needed)
 1. Put this folder in a GitHub repository (for example `openwist/exa-desktop`).
 2. Open the repository's **Actions** tab, choose **Build Exa for Windows**, press **Run workflow**.
-3. When it finishes, download the artifact **Exa-Setup**. Inside is `Exa-Setup-0.1.1.exe`.
+3. When it finishes, download the artifact **Exa-Setup**. Inside is `Exa-Setup-0.1.2.exe`.
 The workflow runs the tests first (`npm test`), then builds a per-user installer (no administrator rights). Installing adds the right-click entries to `HKCU\Software\Classes\Directory\shell\AskExa` and `...\*\shell\AskExa`; uninstalling removes them.
 
 To run it from source on a computer with Node 20: `npm install`, then `npm start` (a folder to test with: `npx electron . --ask "C:\some\folder"`).

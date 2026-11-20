@@ -18,12 +18,21 @@ const MIME = {
 };
 const mimeFor = (name) => MIME[path.extname(name).toLowerCase()] || 'application/octet-stream';
 
-// "Exa.exe --ask <path>": what the right-click menu runs. Anything else is a normal start.
+// What the right-click menu runs:  Exa.exe "--ask=<path>"
+// Chromium moves loose arguments to the end of the command line, after every switch (it turned `--ask "C:\x"` into
+// `--ask --allow-file-access-from-files "C:\x"`), so the path is passed inside the switch itself. The older two-part form
+// is still understood: the last argument that is not a switch is the path.
 function parseArgs(argv) {
-  const a = Array.isArray(argv) ? argv : [];
-  const i = a.indexOf('--ask');
-  if (i === -1 || !a[i + 1]) return { ask: null, hidden: a.includes('--hidden') };
-  return { ask: String(a[i + 1]).replace(/^"+|"+$/g, ''), hidden: false };
+  const a = (Array.isArray(argv) ? argv : []).slice(1).map(String);
+  const hidden = a.includes('--hidden');
+  const clean = (v) => String(v).replace(/^"+|"+$/g, '');
+  const eq = a.find((x) => x.startsWith('--ask='));
+  if (eq) { const v = clean(eq.slice(6)); return v ? { ask: v, hidden: false } : { ask: null, hidden }; }
+  if (a.includes('--ask')) {
+    const loose = a.filter((x) => !x.startsWith('--'));
+    if (loose.length) return { ask: clean(loose[loose.length - 1]), hidden: false };
+  }
+  return { ask: null, hidden };
 }
 
 const same = (x, y) => (process.platform === 'win32' ? x.toLowerCase() === y.toLowerCase() : x === y);

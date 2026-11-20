@@ -62,7 +62,7 @@ test('the Alt+Space shortcut shows Exa, then hides it when focused', () => {
 });
 
 test('right-click on a FILE sends it straight to Exa', async () => {
-  sent.length = 0; log.appOn['second-instance']({}, ['Exa.exe', '--ask', path.join(dir, 'a.txt')]); await settle();
+  sent.length = 0; log.appOn['second-instance']({}, ['Exa.exe', '--allow-file-access-from-files', '--ask=' + path.join(dir, 'a.txt')]); await settle();
   assert.strictEqual(sent.length, 1); assert.strictEqual(sent[0].u, 'https://api.test/api/handoff');
   assert.strictEqual(sent[0].body.origin, 'file'); assert.deepStrictEqual(sent[0].body.files.map((f) => f.name), ['a.txt']);
   assert.deepStrictEqual(exa().loaded.pop(), 'https://site.test/new?handoff=' + 'c'.repeat(32));
@@ -96,7 +96,7 @@ test('a failed upload comes back to the picker as a message and the picker stays
 
 test('missing item and a file failure show a message box', async () => {
   log.appOn['second-instance']({}, ['Exa.exe', '--ask', path.join(tmp, 'gone')]); await settle(); assert.match(log.boxes.pop(), /could not find that item:\n.*gone/); assert.match(fs.readFileSync(path.join(tmp2, 'last-run.log'), 'utf8'), /could not open .*gone.*ENOENT/);
-  log.appOn['second-instance']({}, ['Exa.exe', '--ask', path.join(dir, 'a.txt')]); await settle(); assert.match(log.boxes.pop(), /could not reach Exa/);
+  log.appOn['second-instance']({}, ['Exa.exe', '--allow-file-access-from-files', '--ask=' + path.join(dir, 'a.txt')]); await settle(); assert.match(log.boxes.pop(), /could not reach Exa/);
 });
 
 test('tray: start with Windows toggle and Quit', () => {

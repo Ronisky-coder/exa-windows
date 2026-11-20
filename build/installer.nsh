@@ -3,11 +3,11 @@
   WriteRegStr HKCU "Software\Classes\Directory\shell\AskExa" "" "Ask Exa"
   WriteRegStr HKCU "Software\Classes\Directory\shell\AskExa" "Icon" "$INSTDIR\${APP_EXECUTABLE_FILENAME}"
   WriteRegStr HKCU "Software\Classes\Directory\shell\AskExa" "MultiSelectModel" "Single"
-  WriteRegStr HKCU "Software\Classes\Directory\shell\AskExa\command" "" '"$INSTDIR\${APP_EXECUTABLE_FILENAME}" --ask "%1"'
+  WriteRegStr HKCU "Software\Classes\Directory\shell\AskExa\command" "" '"$INSTDIR\${APP_EXECUTABLE_FILENAME}" "--ask=%1"'
   WriteRegStr HKCU "Software\Classes\*\shell\AskExa" "" "Ask Exa"
   WriteRegStr HKCU "Software\Classes\*\shell\AskExa" "Icon" "$INSTDIR\${APP_EXECUTABLE_FILENAME}"
   WriteRegStr HKCU "Software\Classes\*\shell\AskExa" "MultiSelectModel" "Single"
-  WriteRegStr HKCU "Software\Classes\*\shell\AskExa\command" "" '"$INSTDIR\${APP_EXECUTABLE_FILENAME}" --ask "%1"'
+  WriteRegStr HKCU "Software\Classes\*\shell\AskExa\command" "" '"$INSTDIR\${APP_EXECUTABLE_FILENAME}" "--ask=%1"'
 !macroend
 
 !macro customUnInstall
