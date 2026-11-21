@@ -3,7 +3,7 @@
   var $ = function (i) { return document.getElementById(i); };
   var api = window.exaPicker;
   var picked = new Map();         // path -> size, kept while you browse into folders
-  var view = null, busy = false;
+  var view = null, busy = false, first = true;
 
   function mb(n) { var v = n / 1048576; return n >= 1048576 ? (v >= 10 || v === Math.floor(v) ? Math.round(v) : v.toFixed(1)) + ' MB' : n >= 1024 ? Math.round(n / 1024) + ' KB' : n + ' B'; }
   function total() { var t = 0; picked.forEach(function (s) { t += s; }); return t; }
@@ -23,12 +23,12 @@
     var ul = $('list');
     var keep = Array.prototype.indexOf.call(ul.querySelectorAll('.row-i'), document.activeElement);   // keep the keyboard place after a tick
     ul.textContent = '';
-    $('where').textContent = view.name;
+    $('where').textContent = view.atRoot ? view.name : view.name;
     $('back').hidden = view.atRoot;
     $('empty').hidden = view.entries.length > 0;
     $('more').hidden = !view.more;
     var files = view.entries.filter(function (e) { return !e.dir; });
-    $('all').hidden = !files.length;
+    $('all').hidden = files.length < 4;
     view.entries.forEach(function (e) {
       var li = document.createElement('li'), b = document.createElement('button');
       b.type = 'button'; b.className = 'row-i';
@@ -54,7 +54,6 @@
     var L = view.limits, n = picked.size;
     $('count').textContent = n ? n + ' of ' + L.maxFiles + ' chosen  ·  ' + mb(total()) : 'Nothing chosen yet';
     $('go').disabled = !n || busy;
-    $('hint').textContent = '';
     var files = view.entries.filter(function (e) { return !e.dir; });
     var all = files.length && files.every(function (e) { return picked.has(e.path) || !!why(e); }) && files.some(function (e) { return picked.has(e.path); });
     $('all').textContent = all ? 'Clear this folder' : 'Select all';
@@ -73,12 +72,20 @@
     else files.forEach(function (e) { if (!picked.has(e.path) && !why(e)) picked.set(e.path, e.size); });
     render();
   }
-  function show(v) { view = v; render(); var f = $('list').querySelector('button'); if (f) f.focus(); }
+  function show(v) {
+    view = v;
+    if (v.theme) document.documentElement.dataset.theme = v.theme;
+    if (first) {                                    // a folder with up to 3 files arrives with them ticked, so Enter is all it takes
+      first = false;
+      var f = v.entries.filter(function (e) { return !e.dir; });
+      if (f.length && f.length <= 3 && !v.entries.some(function (e) { return e.dir; })) f.forEach(function (e) { if (!why(e)) picked.set(e.path, e.size); });
+    }
+    render(); var f = $('list').querySelector('button'); if (f) f.focus(); }
   function open(dir) { say(''); api.list(dir).then(show, function (e) { say(e && e.message ? e.message.replace(/^Error invoking remote method '[^']*': (Error: )?/, '') : 'Could not open that folder.'); }); }
 
   $('back').onclick = function () { if (view && view.parent) open(view.parent); };
   $('all').onclick = selectAll;
-  $('cancel').onclick = function () { api.cancel(); };
+  $('x').onclick = function () { api.cancel(); };
   $('go').onclick = function () {
     if (busy || !picked.size) return;
     busy = true; say(''); $('go').textContent = 'Sending'; $('go').disabled = true;
@@ -88,8 +95,11 @@
     }, function () { busy = false; $('go').textContent = 'Ask Exa'; say('Could not send. Try again.'); status(); });
   };
   document.addEventListener('keydown', function (e) {
+    var rows = Array.prototype.slice.call($('list').querySelectorAll('.row-i')), at = rows.indexOf(document.activeElement);
     if (e.key === 'Escape') api.cancel();
-    else if (e.key === 'Enter' && !e.target.closest('.list') && !$('go').disabled) $('go').click();
+    else if (e.key === 'Enter' && !$('go').disabled) { e.preventDefault(); $('go').click(); }
+    else if (e.key === 'ArrowDown' && rows.length) { e.preventDefault(); rows[Math.min(at + 1, rows.length - 1)].focus(); }
+    else if (e.key === 'ArrowUp' && rows.length) { e.preventDefault(); rows[Math.max(at - 1, 0)].focus(); }
     else if (e.key === 'Backspace' && view && view.parent && !busy) open(view.parent);
   });
   api.init().then(show, function () { say('Could not open the folder.'); });

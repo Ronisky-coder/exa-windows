@@ -4,21 +4,28 @@
 //   folder -> a small window lists what is inside with tick boxes; only the ticked files are sent
 // Exa opens in this app's own window, which keeps you signed in.
 const path = require('path');
-const { app, BrowserWindow, Tray, Menu, nativeImage, globalShortcut, ipcMain, shell, dialog } = require('electron');
+const { app, BrowserWindow, Tray, Menu, nativeImage, globalShortcut, ipcMain, shell, dialog, screen } = require('electron');
 const core = require('./core');
 
 const API = process.env.EXA_API || core.DEFAULT_API;
 const SITE = process.env.EXA_SITE || core.DEFAULT_SITE;
 const SITE_ORIGIN = new URL(SITE).origin;
-const state = { exa: null, picker: null, root: null, tray: null, quitting: false };
+const state = { exa: null, picker: null, mini: null, root: null, tray: null, quitting: false, sending: false, theme: null };
 
 function icon() { return nativeImage.createFromPath(path.join(__dirname, '..', 'build', 'icon.png')); }
 
 // Keeps a note of what the Exa window does (page address without the query, errors) and shows a plain page if Exa cannot load.
 function where(u) { try { const x = new URL(u); return x.origin + x.pathname; } catch (_) { return '?'; } }
-function watch(w) {
+function watch(w, isExa) {
   const c = w.webContents; let errs = 0;
-  c.on('did-finish-load', () => note('page loaded ' + where(c.getURL())));
+  c.setUserAgent(c.getUserAgent() + ' ExaDesktop/' + app.getVersion());        // the website uses this to know it is inside the app (small answer window)
+  c.on('did-finish-load', () => {
+    note('page loaded ' + where(c.getURL()));
+    if (isExa && c.executeJavaScript) {                                          // so the tick-box window can match the theme you use in Exa
+      c.executeJavaScript("(function(){var c=(getComputedStyle(document.body).backgroundColor.match(/\\d+/g)||[38,38,36]);return (+c[0]*299+ +c[1]*587+ +c[2]*114)/1000>140?'light':'dark'})()")
+        .then((t) => { if (t === 'light' || t === 'dark') state.theme = t; }).catch(() => {});
+    }
+  });
   c.on('did-fail-load', (_e, code, desc, url, isMain) => {
     if (!isMain || code === -3) return;                                  // -3 = replaced by a newer load, not a failure
     note('page failed ' + code + ' ' + desc + ' ' + where(url));
@@ -45,7 +52,7 @@ function exaWindow() {
   w.on('close', (e) => { if (!state.quitting) { e.preventDefault(); w.hide(); } });       // closing hides it; Quit is in the tray
   w.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:/i.test(url)) shell.openExternal(url); return { action: 'deny' }; });
   w.webContents.on('will-navigate', (e, url) => { if (!/^https:/i.test(url) && !url.startsWith(SITE_ORIGIN)) e.preventDefault(); });
-  watch(w);
+  watch(w, true);
   w.loadURL(SITE + '/new').catch(() => {});       // a load that is replaced by a newer one (or fails) is reported by watch()
   state.exa = w;
   return w;
@@ -64,26 +71,69 @@ function toggleExa() {
   if (w && !w.isDestroyed() && w.isVisible() && w.isFocused()) w.hide(); else showExa();
 }
 
+// Where small windows appear: the picker next to the pointer (where you just clicked), the answer window in the bottom right corner.
+function nearPointer(wd, ht) {
+  const p = screen.getCursorScreenPoint(), a = screen.getDisplayNearestPoint(p).workArea;
+  return { x: Math.round(Math.min(Math.max(p.x - 40, a.x + 8), a.x + a.width - wd - 8)), y: Math.round(Math.min(Math.max(p.y - 40, a.y + 8), a.y + a.height - ht - 8)) };
+}
+function bottomRight(wd, ht) {
+  const a = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
+  return { x: a.x + a.width - wd - 16, y: a.y + a.height - ht - 16 };
+}
+// Clicking anywhere else dismisses a small window, unless it is busy: the answer window keeps going while Exa is working
+// (the page puts "working" in its title) and stays until you close it.
+function dismissOnBlur(w, busy) {
+  w.on('blur', () => setTimeout(() => { if (!w.isDestroyed() && !w.isFocused() && !busy()) w.destroy(); }, 200));
+}
+
+function closeMini() { if (state.mini && !state.mini.isDestroyed()) state.mini.destroy(); state.mini = null; }
+
+// The small answer window: Exa's own page in a lean layout (the website switches to it for "&mini=1" inside this app).
+// It sends the ticked files by itself and shows the thinking and the answer. "Open in app" continues the same chat in the Exa window.
+function openMini(url) {
+  closeMini();
+  const wd = 420, ht = 620, pos = bottomRight(wd, ht);
+  const w = new BrowserWindow({
+    width: wd, height: ht, x: pos.x, y: pos.y, minWidth: 340, minHeight: 360, show: false, frame: false, alwaysOnTop: true, title: 'Exa', icon: icon(),
+    backgroundColor: '#262624', webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false },
+  });
+  watch(w, false);
+  w.once('ready-to-show', () => { w.show(); w.focus(); });
+  w.webContents.setWindowOpenHandler(({ url: u }) => {
+    if (u.startsWith(SITE_ORIGIN + '/new?open=')) { showExa(u); closeMini(); } else if (/^https?:/i.test(u)) shell.openExternal(u);
+    return { action: 'deny' };
+  });
+  w.webContents.on('will-navigate', (e, u) => { if (!/^https:/i.test(u) && !u.startsWith(SITE_ORIGIN)) e.preventDefault(); });
+  dismissOnBlur(w, () => /working/.test(w.webContents.getTitle()));
+  w.on('closed', () => { if (state.mini === w) state.mini = null; });
+  w.loadURL(url).catch(() => {});
+  state.mini = w;
+  return w;
+}
+
 function problem(msg) { dialog.showMessageBox({ type: 'info', title: 'Ask Exa', message: msg, buttons: ['OK'] }); }
 
 async function sendAndOpen(paths, root, origin, name) {
   const bundle = core.buildBundle(paths, root, origin, name);
   const id = await core.postHandoff(API, bundle);
-  showExa(core.handoffUrl(SITE, id));
+  openMini(core.handoffUrl(SITE, id) + '&mini=1');
 }
 
 function openPicker(folder) {
   if (state.picker && !state.picker.isDestroyed()) state.picker.destroy();
   state.root = folder;
+  const wd = 400, ht = 500, pos = nearPointer(wd, ht);
   const w = new BrowserWindow({
-    width: 480, height: 660, minWidth: 360, minHeight: 420, title: 'Ask Exa', icon: icon(), autoHideMenuBar: true,
-    alwaysOnTop: true, backgroundColor: '#262624',
+    width: wd, height: ht, x: pos.x, y: pos.y, minWidth: 340, minHeight: 360, title: 'Ask Exa', icon: icon(), autoHideMenuBar: true,
+    show: false, frame: false, alwaysOnTop: true, backgroundColor: state.theme === 'light' ? '#FAF9F5' : '#262624',
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, sandbox: true, nodeIntegration: false },
   });
   w.setMenuBarVisibility(false);
   w.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   w.webContents.on('will-navigate', (e) => e.preventDefault());
   w.on('closed', () => { if (state.picker === w) { state.picker = null; state.root = null; } });
+  w.once('ready-to-show', () => { w.show(); w.focus(); });
+  dismissOnBlur(w, () => state.sending);
   w.loadFile(path.join(__dirname, '..', 'picker', 'picker.html'));
   state.picker = w;
 }
@@ -115,15 +165,17 @@ function handle(argv) {
 // The picker may only ask about the folder that was right-clicked, and only from its own window.
 function fromPicker(e) { return !!state.picker && !state.picker.isDestroyed() && e.sender === state.picker.webContents && !!state.root; }
 function registerIpc() {
-  ipcMain.handle('picker:init', (e) => { if (!fromPicker(e)) throw new Error('Not allowed.'); return core.listDir(state.root, state.root); });
-  ipcMain.handle('picker:list', (e, dir) => { if (!fromPicker(e)) throw new Error('Not allowed.'); return core.listDir(state.root, String(dir)); });
+  ipcMain.handle('picker:init', (e) => { if (!fromPicker(e)) throw new Error('Not allowed.'); return Object.assign(core.listDir(state.root, state.root), { theme: state.theme }); });
+  ipcMain.handle('picker:list', (e, dir) => { if (!fromPicker(e)) throw new Error('Not allowed.'); return Object.assign(core.listDir(state.root, String(dir)), { theme: state.theme }); });
   ipcMain.handle('picker:send', async (e, paths) => {
     if (!fromPicker(e)) throw new Error('Not allowed.');
+    state.sending = true;
     try {
       await sendAndOpen(paths, state.root, 'folder', path.basename(state.root));
       if (state.picker && !state.picker.isDestroyed()) state.picker.close();
       return { ok: true };
     } catch (err) { return { ok: false, error: err.message }; }
+    finally { state.sending = false; }
   });
   ipcMain.handle('picker:cancel', (e) => { if (fromPicker(e)) state.picker.close(); });
 }

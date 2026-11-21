@@ -2,20 +2,19 @@
 
 A small Windows app that lives in the tray and adds **Ask Exa** to the right-click menu.
 
-- Right-click a **file** > Ask Exa: the file goes straight to Exa (up to 6 MB).
-- Right-click a **folder** > Ask Exa: a small window lists what is inside with tick boxes. You tick the files Exa should look at (up to 8 files, 6 MB each, 15 MB together) and press Ask Exa. Only the ticked files leave the computer. You can open sub-folders inside the window and keep ticking.
-- Exa opens in the app's own window, so you sign in once and stay signed in. **Alt+Space** shows or hides Exa. The tray icon has Open Exa, Start with Windows (off by default) and Quit. Closing the window hides it; Quit is in the tray.
-- Exa then says what it sees and asks what you want to do. It cannot change files on your computer.
-
-If something fails, the app keeps a short note of what Windows gave it (paths and error codes, on this computer only) in `%APPDATA%\Exa\last-run.log`: it also records page loads (address without the query) and page errors. In the Exa window, Ctrl+R reloads and Ctrl+Shift+I opens the developer tools. If Exa cannot load, a plain page with Try again appears.
+- Right-click a **file** > Ask Exa: the file is sent at once (up to 6 MB).
+- Right-click a **folder** > Ask Exa: a small picker opens next to the pointer and lists what is inside with tick boxes. A small folder (up to 3 files, no sub-folders) arrives ticked, so Enter is all it takes. Otherwise tick what Exa should look at (up to 8 files, 6 MB each, 15 MB together), open sub-folders if needed, and press Ask Exa. Only the ticked files leave the computer.
+- Then the picker closes and a **small answer window** opens in the bottom right corner. It sends the files by itself and shows only Exa's thinking and answer. **Open in app** continues the same chat in the main Exa window with your files and everything preserved. You can ask a follow-up in the small window. Dismiss it with Esc, the X, or by clicking anywhere else (it stays open while Exa is still working).
+- The main Exa window keeps you signed in. **Alt+Space** shows or hides it. The tray icon has Open Exa, Start with Windows (off by default) and Quit. Closing the window hides it; Quit is in the tray.
+- Exa cannot change files on your computer.
 
 ## How it sends things
-The app posts the ticked files to `POST /api/handoff` on the Exa backend (5.6.13+), gets back a one-time id, and opens `https://exa.openwist.com/new?handoff=<id>` in its own window. The website claims the id once, attaches the files and writes a first message. The drop lives 15 minutes and is deleted when read. See `DEPLOY.md` in the website package.
+The app posts the ticked files to `POST /api/handoff` on the Exa backend (5.6.13+), gets back a one-time id, and opens `https://exa.openwist.com/new?handoff=<id>&mini=1` in the small window. The website claims the id once, attaches the files, writes the first message and sends it. The drop lives 15 minutes and is deleted when read. See `DEPLOY.md` in the website package.
 
 ## Build the installer (no Windows PC needed)
 1. Put this folder in a GitHub repository (for example `openwist/exa-desktop`).
 2. Open the repository's **Actions** tab, choose **Build Exa for Windows**, press **Run workflow**.
-3. When it finishes, download the artifact **Exa-Setup**. Inside is `Exa-Setup-0.1.3.exe`.
+3. When it finishes, download the artifact **Exa-Setup**. Inside is `Exa-Setup-0.2.0.exe`.
 The workflow runs the tests first (`npm test`), then builds a per-user installer (no administrator rights). Installing adds the right-click entries to `HKCU\Software\Classes\Directory\shell\AskExa` and `...\*\shell\AskExa`; uninstalling removes them.
 
 To run it from source on a computer with Node 20: `npm install`, then `npm start` (a folder to test with: `npx electron . --ask "C:\some\folder"`).
@@ -28,5 +27,5 @@ To run it from source on a computer with Node 20: `npm install`, then `npm start
 - Hidden files: the picker leaves out names starting with `.`, `desktop.ini`, `Thumbs.db` and `~$` temp files, but cannot see the Windows "hidden" attribute.
 
 ## Tests
-- `npm test`: the file listing, the checks on chosen paths, size limits, the upload, and the main program's behaviour against a stand-in for Electron (right-click on a file, on a folder, the picker's permissions, windows, tray). 16 tests.
+- `npm test`: the file listing, the checks on chosen paths, size limits, the upload, and the main program's behaviour against a stand-in for Electron (right-click on a file, on a folder, the picker's permissions, windows, tray). 19 tests.
 - `python3 test/picker_ui.py`: the tick-box window in Chromium (needs Python Playwright), with screenshots in `test/shots`.

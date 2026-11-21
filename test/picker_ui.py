@@ -16,6 +16,8 @@ TREE = {
       f("empty.txt", 0)]},
   "R/Old": {"dir": "R/Old", "name": "Old", "atRoot": False, "parent": "R", "limits": L, "more": False, "entries": [
       {"name": "a.pdf", "path": "R/Old/a.pdf", "dir": False, "size": 1000, "mtime": "2025-01-01"}, {"name": "b.pdf", "path": "R/Old/b.pdf", "dir": False, "size": 1000, "mtime": "2025-01-02"}]},
+  "few": {"dir": "few", "name": "Receipts", "atRoot": True, "parent": None, "limits": L, "more": False, "entries": [
+      {"name": "a.pdf", "path": "few/a.pdf", "dir": False, "size": 2000, "mtime": "2026-03-01"}, {"name": "b.png", "path": "few/b.png", "dir": False, "size": 3000, "mtime": "2026-03-02"}]},
   "many": {"dir": "many", "name": "Many", "atRoot": True, "parent": None, "limits": L, "more": False,
            "entries": [{"name": "f%d.txt" % i, "path": "many/f%d.txt" % i, "dir": False, "size": 100, "mtime": "2026-01-01"} for i in range(12)]},
   "tight": {"dir": "tight", "name": "Tight", "atRoot": True, "parent": None, "limits": L, "more": False,
@@ -38,7 +40,7 @@ def calls(pg): return pg.evaluate("window.__calls")
 with sync_playwright() as p:
     br = p.chromium.launch()
     pg = page(br)
-    check("title and folder name", "Choose what Exa should look at" in pg.inner_text("h1") and pg.inner_text("#where") == "Invoices 2026")
+    check("shows the folder name and the one instruction", pg.inner_text("#where") == "Invoices 2026" and "Tick what Exa should look at" in pg.inner_text(".sub"))
     r = rows(pg)
     check("folders come first", r[0]["t"].startswith("Old"), r[0])
     check("button is off until something is ticked", pg.is_disabled("#go") and "Nothing chosen" in pg.inner_text("#count"))
@@ -57,7 +59,7 @@ with sync_playwright() as p:
     pg.click("#back"); pg.wait_for_selector("text=budget.xlsx")
     check("back returns to the top and keeps ticks", pg.inner_text("#where") == "Invoices 2026" and "3 of 8" in pg.inner_text("#count"))
     check("back arrow is hidden at the top folder", pg.is_hidden("#back"))
-    pg.screenshot(path=SH + "/picker-light.png")
+    pg.wait_for_timeout(300); pg.screenshot(path=SH + "/picker-light.png")
     pg.click("#go"); pg.wait_for_timeout(100)
     sent = [c for c in calls(pg) if c[0] == "send"]
     check("sends exactly the ticked files", len(sent) == 1 and sorted(sent[0][1]) == ["R/Old/a.pdf", "R/budget.xlsx", "R/march.pdf"], sent)
@@ -67,11 +69,12 @@ with sync_playwright() as p:
     pg.click("#go"); pg.wait_for_selector("#err:not([hidden])")
     check("a failed send says why", "could not reach Exa" in pg.inner_text("#err") and not pg.is_disabled("#go") and pg.inner_text("#go") == "Ask Exa")
     pg.keyboard.press("Escape"); check("Escape cancels", ["cancel"] in calls(pg))
+    pg.click("#x"); check("the close button cancels", calls(pg).count(["cancel"]) == 2)
     # select all
     pg = page(br)
     pg.click("#all"); r = rows(pg)
     check("select all ticks only what is allowed", [x["c"] for x in r if "budget" in x["t"] or "march" in x["t"] or "receipt" in x["t"]] == ["true"] * 3 and [x["c"] for x in r if "huge" in x["t"] or "empty" in x["t"]] == ["false"] * 2, r)
-    check("button reads Clear this folder after", pg.inner_text("#all") == "Clear this folder")
+    check("button reads Clear this folder after", pg.inner_text("#all") == "Clear this folder", repr(pg.inner_text("#all")))
     pg.click("#all"); check("and clears again", "Nothing chosen" in pg.inner_text("#count") and pg.inner_text("#all") == "Select all")
     # eight at most
     pg = page(br, "many"); pg.click("#all")
@@ -89,11 +92,21 @@ with sync_playwright() as p:
     # an unexpected error from the app is shown without the Electron wrapper text
     pg = page(br); pg.evaluate("window.exaPicker.list = () => Promise.reject(new Error(\"Error invoking remote method 'picker:list': Error: That folder is outside the one you chose.\")); 0")
     pg.click("text=Old"); pg.wait_for_selector("#err:not([hidden])"); check("errors are plain", pg.inner_text("#err") == "That folder is outside the one you chose.", pg.inner_text("#err"))
+    # a small folder arrives ticked, and Enter sends
+    pg = page(br, "few")
+    check("up to 3 files and no folders: all ticked on arrival", "2 of 8 chosen" in pg.inner_text("#count") and not pg.is_disabled("#go"), pg.inner_text("#count"))
+    check("Select all is not offered for a small folder", pg.is_hidden("#all"))
+    pg.keyboard.press("Enter"); check("Enter sends them", [c for c in calls(pg) if c[0] == "send"] and sorted([c for c in calls(pg) if c[0] == "send"][0][1]) == ["few/a.pdf", "few/b.png"], calls(pg))
+    pg = page(br); check("a bigger folder is not pre-ticked", "Nothing chosen" in pg.inner_text("#count"))
+    pg = page(br); pg.evaluate("document.documentElement.dataset.theme = 'light'"); pg.screenshot(path=SH + "/picker-theme-light.png")
+    # arrow keys move between rows
+    pg = page(br); pg.focus(".row-i:has-text('budget.xlsx')"); pg.keyboard.press("ArrowDown"); check("ArrowDown moves to the next row", pg.evaluate("document.activeElement.innerText").startswith("march.pdf"))
+    pg.keyboard.press("ArrowUp"); check("ArrowUp moves back", pg.evaluate("document.activeElement.innerText").startswith("budget.xlsx"))
     # looks: dark, narrow, no sideways scroll
     for name, kw in [("dark", dict(scheme="dark")), ("narrow", dict(w=340, h=560)), ("dark-narrow", dict(w=340, h=560, scheme="dark"))]:
-        pg = page(br, **kw); pg.click("text=budget.xlsx"); pg.click("text=receipt.png"); pg.screenshot(path=SH + "/picker-%s.png" % name)
+        pg = page(br, **kw); pg.click("text=budget.xlsx"); pg.click("text=receipt.png"); pg.wait_for_timeout(300); pg.screenshot(path=SH + "/picker-%s.png" % name)
         check(name + ": no sideways scroll", pg.evaluate("document.documentElement.scrollWidth <= innerWidth"))
-        check(name + ": footer buttons visible", pg.is_visible("#go") and pg.is_visible("#cancel"))
+        check(name + ": the button and close are visible", pg.is_visible("#go") and pg.is_visible("#x"))
     # file names are text, never markup
     pg = page(br); pg.evaluate("window.__tree.R.entries[1].name = '<img src=x onerror=window.__x=1>.pdf'"); pg.reload(); pg.wait_for_selector(".row-i")
     check("a file name is shown as text, not run", pg.evaluate("window.__x") is None)
