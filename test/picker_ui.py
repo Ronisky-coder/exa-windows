@@ -107,6 +107,19 @@ with sync_playwright() as p:
         pg = page(br, **kw); pg.click("text=budget.xlsx"); pg.click("text=receipt.png"); pg.wait_for_timeout(300); pg.screenshot(path=SH + "/picker-%s.png" % name)
         check(name + ": no sideways scroll", pg.evaluate("document.documentElement.scrollWidth <= innerWidth"))
         check(name + ": the button and close are visible", pg.is_visible("#go") and pg.is_visible("#x"))
+    # the real window is 420x520 and transparent: rounded card, no scrollbar, still scrollable
+    for scheme in ("light", "dark"):
+        pg = page(br, start="many", w=420, h=520, scheme=scheme)
+        pg.evaluate("document.querySelector('.list').insertAdjacentHTML('beforeend', '<li style=\"height:900px\"></li>')") if False else None
+        r = pg.evaluate("""() => { const l = document.querySelector('.list'), w = document.querySelector('.wrap');
+          return { sb: l.offsetWidth - l.clientWidth, rad: getComputedStyle(w).borderTopLeftRadius, bg: getComputedStyle(document.body).backgroundColor, canScroll: l.scrollHeight > l.clientHeight, pad: getComputedStyle(document.body).paddingTop }; }""")
+        check(scheme + ": no scrollbar is drawn", r["sb"] == 0, r)
+        check(scheme + ": the card is rounded", r["rad"] == "18px", r)
+        check(scheme + ": the window behind the card is see-through", r["bg"] in ("rgba(0, 0, 0, 0)", "transparent"), r)
+        check(scheme + ": the list still scrolls", r["canScroll"], r)
+        pg.mouse.move(200, 300); pg.mouse.wheel(0, 300); pg.wait_for_timeout(300)
+        check(scheme + ": wheel scrolls it", pg.evaluate("document.querySelector('.list').scrollTop") > 0)
+        pg.screenshot(path=SH + "/picker-round-%s.png" % scheme, omit_background=True)
     # file names are text, never markup
     pg = page(br); pg.evaluate("window.__tree.R.entries[1].name = '<img src=x onerror=window.__x=1>.pdf'"); pg.reload(); pg.wait_for_selector(".row-i")
     check("a file name is shown as text, not run", pg.evaluate("window.__x") is None)

@@ -44,10 +44,11 @@ function watch(w, isExa) {
 function exaWindow() {
   if (state.exa && !state.exa.isDestroyed()) return state.exa;
   const w = new BrowserWindow({
-    width: 1100, height: 780, minWidth: 380, minHeight: 520, show: false, title: 'Exa', icon: icon(), autoHideMenuBar: true,
+    width: 1100, height: 780, minWidth: 380, minHeight: 520, show: false, title: 'Exa Assistant', icon: icon(), autoHideMenuBar: true,
     backgroundColor: '#262624', webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false },
   });
   w.setMenuBarVisibility(false);
+  w.on('page-title-updated', (e) => e.preventDefault());          // the title bar and taskbar always say Exa Assistant
   w.once('ready-to-show', () => w.show());
   w.on('close', (e) => { if (!state.quitting) { e.preventDefault(); w.hide(); } });       // closing hides it; Quit is in the tray
   w.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:/i.test(url)) shell.openExternal(url); return { action: 'deny' }; });
@@ -92,10 +93,10 @@ function closeMini() { if (state.mini && !state.mini.isDestroyed()) state.mini.d
 // It sends the ticked files by itself and shows the thinking and the answer. "Open in app" continues the same chat in the Exa window.
 function openMini(url) {
   closeMini();
-  const wd = 420, ht = 620, pos = bottomRight(wd, ht);
+  const wd = 440, ht = 640, pos = bottomRight(wd, ht);
   const w = new BrowserWindow({
-    width: wd, height: ht, x: pos.x, y: pos.y, minWidth: 340, minHeight: 360, show: false, frame: false, alwaysOnTop: true, title: 'Exa', icon: icon(),
-    backgroundColor: '#262624', webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false },
+    width: wd, height: ht, x: pos.x, y: pos.y, show: false, frame: false, transparent: true, resizable: false, maximizable: false, hasShadow: false, alwaysOnTop: true, title: 'Exa', icon: icon(),
+    backgroundColor: '#00000000', webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false },
   });
   watch(w, false);
   w.once('ready-to-show', () => { w.show(); w.focus(); });
@@ -122,10 +123,10 @@ async function sendAndOpen(paths, root, origin, name) {
 function openPicker(folder) {
   if (state.picker && !state.picker.isDestroyed()) state.picker.destroy();
   state.root = folder;
-  const wd = 400, ht = 500, pos = nearPointer(wd, ht);
+  const wd = 420, ht = 520, pos = nearPointer(wd, ht);
   const w = new BrowserWindow({
-    width: wd, height: ht, x: pos.x, y: pos.y, minWidth: 340, minHeight: 360, title: 'Ask Exa', icon: icon(), autoHideMenuBar: true,
-    show: false, frame: false, alwaysOnTop: true, backgroundColor: state.theme === 'light' ? '#FAF9F5' : '#262624',
+    width: wd, height: ht, x: pos.x, y: pos.y, title: 'Ask Exa', icon: icon(), autoHideMenuBar: true,
+    show: false, frame: false, transparent: true, resizable: false, maximizable: false, hasShadow: false, alwaysOnTop: true, backgroundColor: '#00000000',
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, sandbox: true, nodeIntegration: false },
   });
   w.setMenuBarVisibility(false);
@@ -182,7 +183,7 @@ function registerIpc() {
 
 function makeTray() {
   const t = new Tray(icon().resize({ width: 16, height: 16 }));
-  t.setToolTip('Exa');
+  t.setToolTip('Exa Assistant');
   const menu = () => Menu.buildFromTemplate([
     { label: 'Open Exa', click: () => showExa() },
     { label: 'Start with Windows', type: 'checkbox', checked: app.getLoginItemSettings().openAtLogin,

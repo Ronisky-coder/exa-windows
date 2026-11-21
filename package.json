@@ -1,9 +1,13 @@
 {
   "name": "exa-desktop",
   "productName": "Exa",
-  "version": "0.2.0",
-  "description": "Exa for Windows: right-click a folder or file, choose Ask Exa.",
-  "author": "Openwist <hello@openwist.com>",
+  "version": "0.3.0",
+  "description": "Exa Assistant",
+  "author": {
+    "name": "Openwist Ltd",
+    "email": "hello@openwist.com",
+    "url": "https://openwist.com"
+  },
   "license": "UNLICENSED",
   "private": true,
   "main": "src/main.js",
@@ -19,13 +23,33 @@
   "build": {
     "appId": "com.openwist.exa",
     "productName": "Exa",
-    "copyright": "Openwist",
-    "directories": { "output": "dist", "buildResources": "build" },
-    "files": ["src/**/*", "picker/**/*", "build/icon.png", "package.json"],
+    "copyright": "Copyright © 2026 Openwist Ltd",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "picker/**/*",
+      "build/icon.png",
+      "package.json"
+    ],
     "win": {
-      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "icon": "build/icon.ico",
-      "artifactName": "Exa-Setup-${version}.${ext}"
+      "artifactName": "Exa-Setup.${ext}",
+      "publisherName": [
+        "Openwist Ltd"
+      ],
+      "legalTrademarks": "Exa is a trademark of Openwist Ltd",
+      "requestedExecutionLevel": "asInvoker"
     },
     "nsis": {
       "oneClick": true,
@@ -33,7 +57,14 @@
       "allowElevation": false,
       "runAfterFinish": true,
       "deleteAppDataOnUninstall": false,
-      "include": "build/installer.nsh"
+      "include": "build/installer.nsh",
+      "shortcutName": "Exa",
+      "uninstallDisplayName": "Exa Assistant",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
     }
-  }
+  },
+  "homepage": "https://exa.openwist.com"
 }

@@ -34,7 +34,7 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'exa-m-'));
 const dir = path.join(tmp, 'Docs'); fs.mkdirSync(path.join(dir, 'Sub'), { recursive: true });
 fs.writeFileSync(path.join(dir, 'a.txt'), 'aaa'); fs.writeFileSync(path.join(dir, 'Sub', 'b.txt'), 'bbb'); fs.writeFileSync(path.join(tmp, 'out.txt'), 'zzz');
 const settle = () => new Promise((r) => setTimeout(r, 30));
-const exa = () => log.wins.filter((w) => w.o.title === 'Exa' && w.o.frame !== false).pop();
+const exa = () => log.wins.filter((w) => w.o.title === 'Exa Assistant').pop();
 const mini = () => log.wins.filter((w) => w.o.title === 'Exa' && w.o.frame === false).pop();
 const picker = () => log.wins.filter((w) => w.o.title === 'Ask Exa').pop();
 let argv0 = ['Exa.exe'];
