@@ -1,8 +1,15 @@
 name: Build Exa for Windows
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Optional: attach the installer to this existing release tag (for example V0.3.0)'
+        required: false
+        default: ''
   push:
-    tags: ['v*']
+    tags: ['v*', 'V*']       # tag names are case-sensitive: v0.3.0 and V0.3.0 both build
+permissions:
+  contents: write          # lets the tag build attach Exa-Setup.exe to a GitHub Release
 jobs:
   build:
     runs-on: windows-latest
@@ -12,8 +19,29 @@ jobs:
         with: { node-version: 20 }
       - run: npm install
       - run: npm test
+      # Signing happens only when you have added a code-signing certificate as repository secrets
+      # (CSC_LINK = the .pfx file as base64 or a link, CSC_KEY_PASSWORD = its password). Without them the installer is
+      # built unsigned and Windows shows "Unknown publisher".
       - run: npm run dist
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+      - name: Report whether the installer is signed
+        shell: pwsh
+        run: |
+          $s = Get-AuthenticodeSignature dist/Exa-Setup.exe
+          "Signature status: $($s.Status)"
+          if ($s.SignerCertificate) { "Signed by: $($s.SignerCertificate.Subject)" } else { "Not signed: Windows will show Unknown publisher." }
       - uses: actions/upload-artifact@v4
         with:
           name: Exa-Setup
-          path: dist/Exa-Setup-*.exe
+          path: dist/Exa-Setup.exe
+      - name: Attach to the GitHub Release (tag builds, or a tag typed into Run workflow)
+        if: startsWith(github.ref, 'refs/tags/') || github.event.inputs.release_tag != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.inputs.release_tag || github.ref_name }}
+        run: |
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "Exa for Windows $TAG" --notes "Exa Assistant for Windows."
+          gh release upload "$TAG" dist/Exa-Setup.exe --repo "$GITHUB_REPOSITORY" --clobber
