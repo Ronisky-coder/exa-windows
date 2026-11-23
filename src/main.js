@@ -41,7 +41,7 @@ function watch(w, isExa) {
   });
 }
 
-function exaWindow() {
+function exaWindow(quiet) {
   if (state.exa && !state.exa.isDestroyed()) return state.exa;
   const w = new BrowserWindow({
     width: 1100, height: 780, minWidth: 380, minHeight: 520, show: false, title: 'Exa Assistant', icon: icon(), autoHideMenuBar: true,
@@ -49,7 +49,7 @@ function exaWindow() {
   });
   w.setMenuBarVisibility(false);
   w.on('page-title-updated', (e) => e.preventDefault());          // the title bar and taskbar always say Exa Assistant
-  w.once('ready-to-show', () => w.show());
+  w.once('ready-to-show', () => { if (!quiet) w.show(); });
   w.on('close', (e) => { if (!state.quitting) { e.preventDefault(); w.hide(); } });       // closing hides it; Quit is in the tray
   w.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:/i.test(url)) shell.openExternal(url); return { action: 'deny' }; });
   w.webContents.on('will-navigate', (e, url) => { if (!/^https:/i.test(url) && !url.startsWith(SITE_ORIGIN)) e.preventDefault(); });
@@ -208,6 +208,8 @@ function start() {
     makeTray();
     try { globalShortcut.register('Alt+Space', toggleExa); } catch (_) {}   // if another program owns it, the tray still works
     handle(process.argv);
+    // Load Exa quietly in the background (the window stays hidden). The small windows and the main window then open from saved files instead of starting cold.
+    setTimeout(() => { try { exaWindow(true); } catch (_) {} }, 1500);
   });
 }
 
