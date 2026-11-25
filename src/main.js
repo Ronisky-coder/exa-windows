@@ -4,7 +4,7 @@
 //   folder -> a small window lists what is inside with tick boxes; only the ticked files are sent
 // Exa opens in this app's own window, which keeps you signed in.
 const path = require('path');
-const { app, BrowserWindow, Tray, Menu, nativeImage, globalShortcut, ipcMain, shell, dialog, screen } = require('electron');
+const { app, BrowserWindow, Tray, Menu, nativeImage, globalShortcut, ipcMain, shell, dialog, screen, net, powerMonitor } = require('electron');
 const core = require('./core');
 
 const API = process.env.EXA_API || core.DEFAULT_API;
@@ -30,6 +30,7 @@ function watch(w, isExa) {
     if (!isMain || code === -3) return;                                  // -3 = replaced by a newer load, not a failure
     note('page failed ' + code + ' ' + desc + ' ' + where(url));
     w.loadFile(path.join(__dirname, '..', 'picker', 'offline.html'));
+    keepTrying(w, url);
   });
   c.on('render-process-gone', (_e, d) => note('page process gone: ' + (d && d.reason)));
   c.on('unresponsive', () => note('page not responding'));
@@ -39,6 +40,40 @@ function watch(w, isExa) {
     if (i.key === 'F5' || (i.control && i.key.toLowerCase() === 'r')) { e.preventDefault(); c.reloadIgnoringCache(); }
     else if (i.control && i.shift && i.key.toLowerCase() === 'i') { e.preventDefault(); c.toggleDevTools(); }
   });
+}
+
+// When the page cannot load (no internet, or Exa is not answering) the window shows a calm "reconnecting" page, and
+// Exa keeps knocking in the background: quickly at first, then calmer, and straight away when the computer wakes up or
+// the network comes back. The moment Exa answers, the real page loads by itself. Nothing for the person to press.
+const KNOCK_STEPS = [2000, 3000, 5000, 8000, 13000, 20000, 30000];
+function knock(url) {
+  return new Promise((resolve) => {
+    let done = false; const end = (v) => { if (!done) { done = true; resolve(v); } };
+    try {
+      const target = new URL(url).origin + '/version.json';
+      const req = net.request({ method: 'GET', url: target, cache: 'no-store' });
+      const t = setTimeout(() => { try { req.abort(); } catch (_) {} end(false); }, 8000);
+      req.on('response', (res) => { clearTimeout(t); end(res.statusCode > 0 && res.statusCode < 500); });
+      req.on('error', () => { clearTimeout(t); end(false); });
+      req.end();
+    } catch (_) { end(false); }
+  });
+}
+function keepTrying(w, url) {
+  if (w.__exaKeep) return;
+  let n = 0, timer = null;
+  const target = /^https:\/\/exa\.openwist\.com\//.test(url || '') ? url : 'https://exa.openwist.com/new';
+  const stop = () => { clearTimeout(timer); w.__exaKeep = false; powerMonitor.removeListener('resume', now); };
+  const now = () => { clearTimeout(timer); n = 0; attempt(); };
+  const attempt = async () => {
+    if (w.isDestroyed()) return stop();
+    if (await knock(target)) { note('back online, reloading ' + where(target)); stop(); if (!w.isDestroyed()) w.loadURL(target); return; }
+    timer = setTimeout(attempt, KNOCK_STEPS[Math.min(n++, KNOCK_STEPS.length - 1)]);
+  };
+  w.__exaKeep = true;
+  w.once('closed', stop);
+  powerMonitor.on('resume', now);
+  timer = setTimeout(attempt, KNOCK_STEPS[0]);
 }
 
 function exaWindow(quiet) {

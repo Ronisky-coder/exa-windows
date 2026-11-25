@@ -23,6 +23,8 @@ const electron = {
   globalShortcut: { register: (k, f) => { log.shortcuts[k] = f; }, unregisterAll() {} },
   screen: { getCursorScreenPoint: () => ({ x: 500, y: 400 }), getDisplayNearestPoint: () => ({ workArea: { x: 0, y: 0, width: 1920, height: 1040 } }) },
   ipcMain: { handle: (n, f) => { log.handlers[n] = f; } }, shell: { openExternal: (u) => log.openExternal.push(u) },
+  powerMonitor: { on(n, f) { log.power = log.power || {}; log.power[n] = f; }, removeListener() {} },
+  net: { request: () => { const h = {}; return { on: (n, f) => { h[n] = f; }, abort() {}, end: () => setImmediate(() => { if (log.knockOk) h.response && h.response({ statusCode: 200 }); else h.error && h.error(new Error('offline')); }) }; } },
   dialog: { showMessageBox: (o) => { log.boxes.push(o.message); return Promise.resolve(); } },
 };
 const orig = Module._load; Module._load = function (r, ...a) { return r === 'electron' ? electron : orig.call(this, r, ...a); };
@@ -68,6 +70,17 @@ test('the Exa window keeps a note, shows a plain page when Exa cannot load, and 
   w.wc['render-process-gone']({}, { reason: 'crashed' }); assert.match(keep(), /process gone: crashed/);
   let pd = false; w.wc['before-input-event']({ preventDefault: () => { pd = true; } }, { type: 'keyDown', key: 'r', control: true }); assert.ok(w.reloaded && pd);
   w.wc['before-input-event']({ preventDefault() {} }, { type: 'keyDown', key: 'I', control: true, shift: true }); assert.ok(w.dev);
+});
+
+test('when Exa cannot load, it keeps knocking in the background and opens by itself once Exa answers', async () => {
+  const w = exa(); w.loaded.length = 0; log.knockOk = false;
+  w.wc['did-fail-load']({}, -106, 'ERR_INTERNET_DISCONNECTED', 'https://site.test/new', true);
+  assert.ok(w.file.endsWith('offline.html')); assert.ok(w.__exaKeep, 'knocking in the background has started');
+  await new Promise((r) => setTimeout(r, 2300)); assert.equal(w.loaded.length, 0, 'still offline: nothing reloaded');
+  log.knockOk = true; log.power.resume();                           // the computer wakes up with a connection: knock at once
+  await new Promise((r) => setTimeout(r, 200));
+  assert.ok(w.loaded.some((u) => /exa\.openwist\.com\/new/.test(u)), 'the real page loads by itself: ' + w.loaded.join(','));
+  assert.ok(!w.__exaKeep, 'knocking stops once it is back');
 });
 
 test('the Alt+Space shortcut shows Exa, then hides it when focused', () => {
